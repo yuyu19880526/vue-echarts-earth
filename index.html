@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>echarts 3D earth</title>
+	<style>
+		*{margin: 0;padding: 0;box-sizing: border-box;}
+		html,body{width: 100%;height: 100%;overflow: hidden;}
+		#wraper{height: 100%;position: relative;background: #020021;}
+    .bg-grid{
+      width: 622px;height: 622px;position: relative; top:30px;left:50%;transform: translateX(-50%);
+    }
+		#canvas{
+      width: 622px;
+      height: 622px;
+      z-index: 10;
+      position: absolute;
+    }
+    .canvas div:nth-child(1) {
+      position: relative;
+    }
+    .canvas div:nth-child(1)::after {
+      z-index: -1;
+      display: block;
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 0px;
+      width: 558px;
+      height: 558px;
+      padding: 16px;
+      bottom: 0px;
+      background-image: linear-gradient(
+        150deg,
+        rgba(0, 99, 255, 100%) 10%,
+        rgba(0, 34, 80, 1) 30%
+      );
+      filter: blur(1px);
+      box-shadow: 0px 0px 14px 14px rgba(0, 47, 164, 0.2),
+        inset 0 1px 80px 0 rgba(0, 111, 255, 1);
+      background-color: rgba(0, 99, 255, 0.2);
+      background-repeat: no-repeat;
+      background-size: 100% 100%;
+      position: relative;
+      border-radius: 50%;
+      border: inset 1px solid rgba(0,99,255,1)
+    }
+    .canvas div:nth-child(1)::before {
+      position: absolute;
+      width: 622px;
+      height: 622px;
+      display: block;
+      content: '';
+      border-radius: 50%;
+      background: url(./img/bg-grid.png) no-repeat center;
+      background-size: cover;
+      opacity: 0.5;
+    }
+    #earth-tootip{
+      width: 268px;
+      height: 265px;
+      position: absolute;
+      right: 0;
+      bottom: 80px;
+      background: url(./img/tooltip.png) no-repeat center;
+      background-size: cover;
+      z-index: 12;
+      padding: 15px 24px;
+    }
+    #earth-tootip h1{color: #fff; font-size: 22px;}
+    #earth-tootip p{
+      line-height: 32px;
+      color: #fff;
+      font-size: 18px;
+    }
+    #earth-tootip span{ color: rgba(255,255,255, 0.7); margin-right: 10px;}
+</style>
+
+</head>
+<body>
+	<div id="wraper">
+    <div id="bg-grid" class="bg-grid">
+      <div id="canvas" class="canvas"></div>
+    </div>
+	</div>
+</body>
+<script src="./echarts/dist/echarts.js"></script>
+<script src="./echarts-gl/dist/echarts-gl.js"></script>
+<script src="./echarts/map/js/world.js"></script>
+<script src="./data/data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script>
+
+	const blue = '#0780df'     /*主颜色中危*/
+	const yellow = '#ff9f35'   /*主颜色高危*/
+	const red = '#e6453b'      /*主颜色严重*/
+	const grey = '#7289ab'     /*主颜色低危*/
+	const skyblue = '#01cbe3'
+
+	var app = new Vue({
+		el: '#wraper',
+		data() {
+      return {
+        chart:null,
+        earthSkin:null,
+        tootipPos:{
+          left:0,
+          top:0,
+          display: 'none'
+        },
+        colors:{
+          '严重':red,
+          '高危':yellow,
+          '中危':blue,
+          '低危':grey,
+        },
+        earthData: json
+      }
+    },
+    beforeDestroy(){
+      this.chart && this.chart.dispose()
+      this.earthSkin && this.earthSkin.dispose()
+      this.chart = null
+      this.earthSkin = null
+    },
+    computed:{
+      get3Dserv() {
+        return[{
+          type: 'lines3D',
+          coordinateSystem: 'globe',
+          effect: {
+            show: true,
+            period: 1,
+            trailWidth: 3,
+            trailLength: 1,
+            trailOpacity: 1,
+            trailColor: 'rgba(255,202,0,1)'   
+          },
+          lineStyle:{
+            width: 2,
+            color: 'rgba(255,40,40,0.76)',
+            opacity: 0
+          },
+          blendMode: 'lighter',
+          silent: false,
+          data: this.earthData.map((item, i) =>({
+            coords: [item.source_point,item.attacked_point],
+            lineStyle: {
+              color: '#0780df'
+            }
+          }))
+        },{
+          type: 'scatter3D',  
+          coordinateSystem: 'globe',
+          symbolSize: 5,    
+          data: this.scatterData
+        }]
+      },
+      scatterData(){
+        let data = this.earthData
+        return data.map((item, i)=>({
+          name: item.source_city,
+          value: item.source_point,
+          label:{
+            formatter: p => p.data.name
+          },
+          itemStyle: {
+            color: skyblue
+          }
+        })).concat(data.map((item, i)=>({
+          name: item.attacked_city,
+          value: item.attacked_point,
+          info: item,
+          label:{
+            show: false
+          },
+          itemStyle: {
+            color: this.colors[item.alert_level]
+          }
+        })))
+      },
+      effscatterData(){
+        let data = this.earthData
+        return data.map((item, i)=>({
+          name: item.source_city,
+          value: item.source_point,
+          symbolSize: 5,
+          itemStyle: {
+            color: skyblue
+          }
+        })).concat(data.map((item, i)=>({
+          name: item.attacked_city,
+          value: item.attacked_point,
+          symbolSize: this.symbleSize(item.attack_count),
+          itemStyle: {
+            color: this.colors[item.alert_level]
+          }
+        })))
+      },
+      get2Dserv() {
+        return [{
+          type: 'effectScatter',         
+          coordinateSystem: 'geo',      
+          rippleEffect: {
+            period: 5,
+            scale: 4,
+            brushType:'stroke',
+            color: '#FFCA00'
+          },
+          data:this.effscatterData
+        }]
+      },
+      getGeoArea() {
+        const data = this.earthData
+        return data.map((item, i) => ({
+          name: 'China',
+          itemStyle: {
+            normal: {
+              opacity: 1,
+              areaColor: 'rgba(255,40,40,0.4)',
+              borderColor: 'rgba(255,40,40,1)',
+              borderWidth: 3
+            }
+          }
+        }))
+      }
+    },
+    mounted (){
+      this.initEarth()
+      this.drawData()
+    },
+    methods: {
+      initEarth(){
+        const canvas = document.createElement('canvas');
+        this.earthSkin = echarts.init(canvas, null, {
+          width: 3800,
+          height: 2800
+        });
+        this.earthSkin.setOption({
+          backgroundColor: 'rgba(0,8,34,0.1)',
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}<br/>{c}'
+          },
+          borderColor: '#ccc',
+          visualMap: {
+            inRange: {
+              color: ['rgba(255,40,40,0.4)']
+            }
+          },
+          geo: {
+            map: 'world',
+            left: 0,
+            top: 0, 
+            right: 0,
+            bottom: 0,
+            zoom: 0,
+            boundingCoords: [[-180, 90], [180, -90]],
+            itemStyle: {
+              normal: {
+                areaColor: 'rgba(0,5,255, 0.1)',
+                borderColor:'#12AAFF',
+                borderWidth: 3
+              },
+              emphasis: {
+                areaColor: 'rgba(255,40,40,0.4)',
+                borderColor:'rgba(255,40,40,1)',
+                borderWidth: 4,
+              }
+            },
+            roam: false,
+            label:{
+              show: false
+            },
+            regions: [{
+              name: 'China',
+              itemStyle: {
+                normal: {
+                  opacity: 1,
+                  areaColor: 'rgba(255,40,40,0.4)',
+                  borderColor:'rgba(255,40,40,1)',
+                  borderWidth: 4,
+                }
+              }
+            }]
+          }
+        });
+        this.chart = echarts.init(document.getElementById('canvas'))
+        this.chart.setOption({
+          globe: {
+            baseTexture: this.earthSkin,
+            shading: 'color',
+            top: 'middle',
+            left: 'center',
+            globeRadius : 100,
+            viewControl: {
+              autoRotate: true,
+              distance: 146,
+              autoRotateAfterStill: 3,
+              targetCoord: [116.46 - 10, 39.92 - 10],
+              zoomSensitivity: 0
+            }
+          }
+        });
+      },
+      drawData(){
+        this.chart.setOption({
+          series:this.get3Dserv
+        });
+        this.earthSkin.setOption({
+          series:this.get2Dserv,
+          geo: {
+            regions: this.getGeoArea
+          }
+        })
+      },
+      symbleSize(val){
+        val = val>200?200:val<50?50:val
+        return Math.ceil(val/10)
+      }
+    }
+	})
+</script>
+</html>
